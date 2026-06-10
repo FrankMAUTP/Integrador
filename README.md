@@ -26,7 +26,6 @@ Sistema web para la gestión de alumnos, secciones, actividades y calificaciones
 | Backend | Node.js + Express |
 | Base de datos | MySQL 8 |
 | Autenticación | bcrypt + sesión por cabecera |
-| Correo | Nodemailer (SMTP) |
 | Frontend | HTML, CSS, JavaScript vanilla |
 | Exportación | jsPDF + jsPDF-AutoTable, ExcelJS |
 | Seguridad | Helmet, express-rate-limit, CORS |
@@ -80,36 +79,11 @@ npm install
 
 Abre tu cliente MySQL (MySQL Workbench, HeidiSQL, terminal, etc.) y ejecuta:
 
-```sql
-CREATE DATABASE gestion_academica CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
-
-#### 5.2 Crear las tablas
-
-Ejecuta el siguiente script SQL sobre la base de datos `gestion_academica`:
-
-```sql
-USE gestion_academica;
-
-CREATE TABLE usuarios (
-  id           VARCHAR(36)  PRIMARY KEY,
-  username     VARCHAR(100) NOT NULL UNIQUE,
-  email        VARCHAR(255) NOT NULL UNIQUE,
-  password     VARCHAR(255) NOT NULL,
-  rol          ENUM('docente','admin') NOT NULL DEFAULT 'docente',
-  bloqueado    TINYINT(1)   NOT NULL DEFAULT 0,
-  display_name VARCHAR(150),
-  photo        LONGTEXT,
-  db_json      LONGTEXT,
-  created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-> Si el proyecto incluye un archivo `schema.sql` en la raíz, puedes importarlo directamente en vez de ejecutar el script anterior.
+Un archivo `schema.sql` que se encuntra al descargar el proyecto.
 
 ### 6. Configurar las variables de entorno
 
-Crea un archivo `.env` en la raíz del proyecto con el siguiente contenido (ajusta los valores a tu entorno):
+En el archivo `.env` en la raíz del proyecto con ajusta los valores a tu entorno:
 
 ```env
 # ─── BASE DE DATOS ─────────────────────────────────────
