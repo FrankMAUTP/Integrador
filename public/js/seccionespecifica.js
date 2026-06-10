@@ -24,6 +24,7 @@ let editingRowId       = null;   // id del alumno cuya fila está en edición
 let editingRowSnapshot = null;   // copia de datos antes de editar
 let selectedActType    = 'practica';
 let editingActivityId  = null;
+let gradesEditingMode  = false;
 
 // ---- INIT ----
 document.addEventListener('DOMContentLoaded', async () => {
@@ -107,7 +108,10 @@ function gradeBadgeClass(letter) {
 
 // ---- APPLY FILTERS ----
 function applyFilters() {
+  if (gradesEditingMode) _collectAndSaveGrades();
   const bim     = parseInt(document.getElementById('filter-bimestre').value);
+  if (bim === 0) gradesEditingMode = false;
+  updateGradesBtn();
   const compIdx = getSelectedCompIdx();
   const search  = document.getElementById('search-input').value.toLowerCase().trim();
   const sortBy  = document.getElementById('sort-by').value;
@@ -271,13 +275,15 @@ function buildStudentRow(student, compsToShow, activities, grades, showChartBtn)
       actGradeLetters.push(currentVal);
       const overdue = act && isDatePassed(act.dueDate) && currentVal === '-';
 
-      if (isEditing && act) {
+      if (gradesEditingMode && act) {
         // Combobox con opciones de nota
         const opts = GRADE_OPTIONS.map(o =>
           `<option value="${o}" ${o === currentVal ? 'selected' : ''}>${o}</option>`
         ).join('');
         rowHTML += `<td onclick="event.stopPropagation()" style="text-align:center">
           <select class="grade-select${overdue ? ' grade-overdue' : ''}" id="edit-grade-${student.id}-${actId}"
+            data-student-id="${student.id}"
+            data-act-id="${actId}"
             data-val="${currentVal}"
             onchange="this.setAttribute('data-val', this.value)">
             ${opts}
@@ -396,6 +402,7 @@ function saveRowEditAll(studentId) {
 
 // ---- INLINE EDITING ----
 function startRowEdit(studentId) {
+  if (gradesEditingMode) return;
   if (editingRowId && editingRowId !== studentId) {
     cancelRowEdit();
   }
@@ -419,30 +426,14 @@ function saveRowEdit(studentId) {
   const newName   = nameInput ? nameInput.value.trim() : null;
   if (!newName) { showToast('El nombre no puede estar vacío', 'error'); return; }
 
-  // Guardar nombre
   const students = DB.getStudents(courseId, sectionId);
   const idx = students.findIndex(s => s.id === studentId);
   if (idx !== -1) students[idx].name = newName;
   DB.saveStudents(courseId, sectionId, students);
 
-  // Guardar notas de los selects visibles
-  const grades = DB.getGrades(courseId, sectionId);
-  if (!grades[studentId]) grades[studentId] = {};
-
-  const bim      = parseInt(document.getElementById('filter-bimestre').value) || 1;
-  const compIdx  = getSelectedCompIdx();
-  const activities = getFilteredActivities(bim, compIdx);
-
-  activities.forEach(act => {
-    const sel = document.getElementById(`edit-grade-${studentId}-${act.id}`);
-    if (sel) grades[studentId][act.id] = sel.value;
-  });
-
-  DB.saveGrades(courseId, sectionId, grades);
-
   editingRowId = null;
   editingRowSnapshot = null;
-  showToast('Cambios guardados', 'success');
+  showToast('Nombre actualizado', 'success');
   applyFiltersNoScroll();
 }
 
@@ -454,6 +445,43 @@ function applyFiltersNoScroll() {
 
 function syncEditingUIState() {
   document.querySelector('.main-content').classList.toggle('row-editing', !!editingRowId);
+}
+
+function toggleGradesEditing() {
+  if (gradesEditingMode) {
+    _collectAndSaveGrades();
+    gradesEditingMode = false;
+    updateGradesBtn();
+    showToast('Notas guardadas', 'success');
+    applyFiltersNoScroll();
+  } else {
+    if (editingRowId) cancelRowEdit();
+    gradesEditingMode = true;
+    updateGradesBtn();
+    applyFiltersNoScroll();
+  }
+}
+
+function _collectAndSaveGrades() {
+  const grades = DB.getGrades(courseId, sectionId);
+  document.querySelectorAll('.grade-select[data-student-id]').forEach(sel => {
+    const studentId = sel.dataset.studentId;
+    const actId     = sel.dataset.actId;
+    if (!grades[studentId]) grades[studentId] = {};
+    grades[studentId][actId] = sel.value;
+  });
+  DB.saveGrades(courseId, sectionId, grades);
+}
+
+function updateGradesBtn() {
+  const btn = document.getElementById('btn-edit-grades');
+  if (!btn) return;
+  const bim = parseInt(document.getElementById('filter-bimestre').value);
+  if (bim === 0) { btn.style.display = 'none'; return; }
+  btn.style.display = '';
+  btn.className = gradesEditingMode ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+  const textEl = document.getElementById('btn-edit-grades-text');
+  if (textEl) textEl.textContent = gradesEditingMode ? 'Guardar notas' : 'Editar notas';
 }
 
 // ---- SELECT STUDENT (for retire) ----
