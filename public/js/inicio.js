@@ -47,7 +47,7 @@ function addCompetenciaRow(value) {
   const row = document.createElement('div');
   row.className = 'competencia-row';
   row.innerHTML = `
-    <input type="text" class="form-control" placeholder="Nombre de la competencia *" value="${escapeHtml(value)}" />
+    <input type="text" class="form-control" placeholder="Nombre de la competencia *" value="${escapeHtml(value)}" oninput="this.value=this.value.replace(/[0-9]/g,'')" />
     <button class="btn-remove-comp" onclick="removeCompetencia(this)" title="Eliminar">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="2" y1="8" x2="14" y2="8"/></svg>
     </button>`;
@@ -87,6 +87,7 @@ function validateCompetencias(comps) {
   if (comps.length < 1) return false;
   const vistos = new Set();
   for (const c of comps) {
+    if (/[0-9]/.test(c)) { showToast(`La competencia "${c}" no puede contener números`, 'error'); return false; }
     const clave = c.toLowerCase();
     if (vistos.has(clave)) { showToast(`Competencia duplicada: "${c}"`, 'error'); return false; }
     vistos.add(clave);
@@ -129,6 +130,7 @@ function openCourseModal(courseId = null) {
 function saveCourse() {
   const name = document.getElementById('course-name').value.trim();
   if (!name) { showToast('El nombre del curso es requerido', 'error'); return; }
+  if (/[0-9]/.test(name)) { showToast('El nombre del curso no puede contener números', 'error'); return; }
 
   const compsArray = getCompetencias();
 
