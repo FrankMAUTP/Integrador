@@ -146,18 +146,6 @@ Instálalas desde la pestaña **Extensiones** (`Ctrl + Shift + X`):
 
 ---
 
-## Ejecutar los tests
-
-```bash
-npm test
-```
-
-Ejecuta todos los tests ubicados en la carpeta `tests/` y genera un reporte de cobertura en `coverage/`.
-
-Para ver el reporte de cobertura en el navegador, abre `coverage/lcov-report/index.html`.
-
----
-
 ## Estructura del proyecto
 
 ```
