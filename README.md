@@ -4,6 +4,12 @@ Sistema web para la gestión de alumnos, secciones, actividades y calificaciones
 
 ---
 
+## Alcance del Sistema
+
+La plataforma ha sido diseñada para apoyar las actividades que forman parte del trabajo cotidiano del docente en el aula, el cual se enfoca en registrar evidencias de aprendizaje, evaluar competencias, identificar dificultades y realizar un seguimiento al progreso individual de cada estudiante. Tareas como el cálculo y gestión del orden de mérito, por ejemplo, no constituyen como actividades habituales del proceso de enseñanza-aprendizaje desarrollado por el docente, sino una función administrativa que generalmente es realizada por la dirección de la institución educativa mediante sistemas oficiales como SIAGIE, especialmente para la elaboración de reportes institucionales y reconocimientos académicos. Por ello, dicha funcionalidad se encuentra fuera del alcance del sistema propuesto.
+
+---
+
 ## Características
 
 - Registro e inicio de sesión con contraseña hasheada (bcrypt)
