@@ -147,12 +147,28 @@ const DB = {
     const key = `${courseId}_${sectionId}`;
     if (DB._data.activities) delete DB._data.activities[key];
     if (DB._data.grades)     delete DB._data.grades[key];
-    // Alumnos NO se borran: pertenecen a la sección global (grade_letter)
-    // El llamador es responsable de persistir
+  },
+
+  // Elimina students[grade_letter] de memoria si ninguna otra sección de la cuenta
+  // usa ese mismo grado+letra. excludeSectionId: la sección que se está borrando
+  // (todavía existe en DB._data al momento de llamar esta función).
+  _clearStudentsIfOrphaned(grade, letter, excludeSectionId = null) {
+    const key = `${grade}_${letter}`;
+    const usedElsewhere = DB.getCourses().some(course =>
+      DB.getSections(course.id).some(s =>
+        s.id !== excludeSectionId && s.grade === grade && s.letter === letter
+      )
+    );
+    if (!usedElsewhere && DB._data.students) {
+      delete DB._data.students[key];
+    }
   },
 
   deleteCourseData(courseId) {
-    DB.getSections(courseId).forEach(sec => DB.deleteSectionData(courseId, sec.id));
+    DB.getSections(courseId).forEach(sec => {
+      DB.deleteSectionData(courseId, sec.id);
+      DB._clearStudentsIfOrphaned(sec.grade, sec.letter, sec.id);
+    });
     if (DB._data.sections) delete DB._data.sections[courseId];
     DB._persist();
   },
@@ -438,7 +454,7 @@ function iconDots() {
   return `<svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><circle cx="4" cy="10" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="16" cy="10" r="1.5"/></svg>`;
 }
 // ---- GRADE SCALE & TIME HELPERS ----
-const GRADE_VALUE = { 'AD': 4, 'A': 3, 'B': 2, 'C': 1, '-': null };
+const GRADE_VALUE = { 'AD': 4, 'A': 3, 'B': 2.5, 'C': 1, '-': null };
 
 function toMin(t) {
   const [h, m] = t.split(':').map(Number);

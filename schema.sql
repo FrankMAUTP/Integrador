@@ -82,7 +82,7 @@ CREATE TABLE cursos (
   color      VARCHAR(20)  DEFAULT NULL,
   id_usuario VARCHAR(100) DEFAULT NULL,
   creado_en  BIGINT       DEFAULT NULL,
-  FOREIGN KEY (id_usuario) REFERENCES usuarios(id) ON DELETE SET NULL,
+  FOREIGN KEY (id_usuario) REFERENCES usuarios(id) ON DELETE CASCADE,
   INDEX idx_curso_usuario (id_usuario)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -143,7 +143,7 @@ CREATE TABLE alumnos (
   observacion TEXT         DEFAULT NULL,
   retirado    TINYINT(1)   DEFAULT 0,
   FOREIGN KEY (id_salon)   REFERENCES salones(id)  ON DELETE CASCADE,
-  FOREIGN KEY (id_usuario) REFERENCES usuarios(id) ON DELETE SET NULL,
+  FOREIGN KEY (id_usuario) REFERENCES usuarios(id) ON DELETE CASCADE,
   INDEX idx_alu_salon    (id_salon),
   INDEX idx_alu_usuario  (id_usuario)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -113,7 +113,9 @@ function applyFilters() {
   if (bim === 0) gradesEditingMode = false;
   updateGradesBtn();
   const compIdx = getSelectedCompIdx();
-  const search  = document.getElementById('search-input').value.toLowerCase().trim();
+  const searchEl = document.getElementById('search-input');
+  searchEl.value = searchEl.value.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ ]/g, '');
+  const search   = searchEl.value.toLowerCase().trim();
   const sortBy  = document.getElementById('sort-by').value;
 
   const allStudents = DB.getStudents(courseId, sectionId).filter(s => !s.retired);
@@ -123,7 +125,7 @@ function applyFilters() {
     : [...allStudents];
 
   if (sortBy === 'avg') {
-    const AVG_ORDER = { 'AD': 4, 'A': 3, 'B': 2, 'C': 1 };
+    const AVG_ORDER = { 'AD': 4, 'A': 3, 'B': 2.5, 'C': 1 };
     const sortActs = bim === 0
       ? DB.getActivities(courseId, sectionId)
       : getFilteredActivities(bim, compIdx);
@@ -256,7 +258,7 @@ function buildStudentRow(student, compsToShow, activities, grades, showChartBtn)
   // ---- Nombre ----
   if (isEditing) {
     rowHTML += `<td onclick="event.stopPropagation()">
-      <input type="text" class="row-name-input" id="edit-name-${student.id}" value="${escapeHtml(student.name)}" />
+      <input type="text" class="row-name-input" id="edit-name-${student.id}" value="${escapeHtml(student.name)}" oninput="this.value=this.value.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ ]/g,'')" />
     </td>`;
   } else {
     rowHTML += `<td style="font-weight:500;white-space:nowrap">${escapeHtml(student.name)}</td>`;
@@ -361,7 +363,7 @@ function renderTableAll() {
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="2 8 6 12 14 4"/></svg>
         </button></td>`;
       row += `<td onclick="event.stopPropagation()">
-        <input type="text" class="row-name-input" id="edit-name-${student.id}" value="${escapeHtml(student.name)}" />
+        <input type="text" class="row-name-input" id="edit-name-${student.id}" value="${escapeHtml(student.name)}" oninput="this.value=this.value.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ ]/g,'')" />
       </td>`;
     } else {
       row += `<td onclick="event.stopPropagation()">
@@ -388,6 +390,13 @@ function saveRowEditAll(studentId) {
   const nameInput = document.getElementById(`edit-name-${studentId}`);
   const newName = nameInput ? nameInput.value.trim() : null;
   if (!newName) { showToast('El nombre no puede estar vacío', 'error'); return; }
+  if (/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ ]/.test(newName)) { showToast('El nombre no puede contener caracteres especiales', 'error'); return; }
+
+  const existingNames = getAllStudentNames();
+  const currentName = (DB.getStudents(courseId, sectionId).find(s => s.id === studentId)?.name || '').toLowerCase();
+  if (newName.toLowerCase() !== currentName && existingNames.has(newName.toLowerCase())) {
+    showToast('Este alumno ya está registrado en el sistema', 'error'); return;
+  }
 
   const students = DB.getStudents(courseId, sectionId);
   const idx = students.findIndex(s => s.id === studentId);
@@ -425,6 +434,13 @@ function saveRowEdit(studentId) {
   const nameInput = document.getElementById(`edit-name-${studentId}`);
   const newName   = nameInput ? nameInput.value.trim() : null;
   if (!newName) { showToast('El nombre no puede estar vacío', 'error'); return; }
+  if (/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ ]/.test(newName)) { showToast('El nombre no puede contener caracteres especiales', 'error'); return; }
+
+  const existingNames = getAllStudentNames();
+  const currentName = (DB.getStudents(courseId, sectionId).find(s => s.id === studentId)?.name || '').toLowerCase();
+  if (newName.toLowerCase() !== currentName && existingNames.has(newName.toLowerCase())) {
+    showToast('Este alumno ya está registrado en el sistema', 'error'); return;
+  }
 
   const students = DB.getStudents(courseId, sectionId);
   const idx = students.findIndex(s => s.id === studentId);
@@ -539,6 +555,7 @@ function getAllStudentNames() {
 function saveStudent() {
   const name = document.getElementById('student-name').value.trim();
   if (!name) { showToast('Ingresa el nombre del alumno', 'error'); return; }
+  if (/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ ]/.test(name)) { showToast('El nombre no puede contener caracteres especiales', 'error'); return; }
 
   if (getAllStudentNames().has(name.toLowerCase())) {
     showToast('Este alumno ya está registrado en el sistema', 'error'); return;
@@ -656,6 +673,7 @@ function selectActType(type, el) {
 function saveActivity() {
   const name = document.getElementById('act-name').value.trim();
   if (!name) { showToast('Ingresa el nombre de la actividad', 'error'); return; }
+  if (/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ ]/.test(name)) { showToast('El nombre de la actividad no puede contener caracteres especiales', 'error'); return; }
   const bim     = parseInt(document.getElementById('act-filter-bim').value) || 1;
   const compIdx = parseInt(document.getElementById('act-filter-comp').value);
   if (isNaN(compIdx)) { showToast('No hay competencias definidas para este bimestre', 'error'); return; }
@@ -863,23 +881,36 @@ function renderImportPreview(names) {
   const list     = document.getElementById('import-preview-list');
   const note     = document.getElementById('import-duplicate-note');
   const hasDups  = names.some(n => existing.has(n.toLowerCase()));
+  const hasInvalid = names.some(n => /[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ ]/.test(n));
 
-  note.style.display = hasDups ? '' : 'none';
-  if (hasDups) {
-    note.textContent = 'Los nombres ya registrados en cualquier sección serán omitidos.';
+  if (hasDups || hasInvalid) {
+    note.style.display = '';
+    const parts = [];
+    if (hasDups)    parts.push('Los nombres ya registrados en cualquier sección serán omitidos.');
+    if (hasInvalid) parts.push('Los nombres con números o caracteres especiales serán omitidos.');
+    note.textContent = parts.join(' ');
+  } else {
+    note.style.display = 'none';
   }
 
   list.innerHTML = names.map((name, i) => {
-    const isDup = existing.has(name.toLowerCase());
+    const isDup     = existing.has(name.toLowerCase());
+    const isInvalid = /[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ ]/.test(name);
+    const disabled  = isDup || isInvalid;
+    const tag = isDup
+      ? '<span style="font-size:11px;color:var(--text-muted)">ya registrado</span>'
+      : isInvalid
+        ? '<span style="font-size:11px;color:var(--red)">contiene números</span>'
+        : '';
     return `
       <label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;
                     background:var(--bg);border:1px solid var(--border-light);cursor:pointer;
-                    ${isDup ? 'opacity:0.5' : ''}">
-        <input type="checkbox" data-idx="${i}" ${isDup ? '' : 'checked'}
-               ${isDup ? 'disabled' : ''}
+                    ${disabled ? 'opacity:0.5' : ''}">
+        <input type="checkbox" data-idx="${i}" ${disabled ? '' : 'checked'}
+               ${disabled ? 'disabled' : ''}
                style="width:15px;height:15px;flex-shrink:0" />
         <span style="font-size:13px;flex:1">${name}</span>
-        ${isDup ? '<span style="font-size:11px;color:var(--text-muted)">ya registrado</span>' : ''}
+        ${tag}
       </label>`;
   }).join('');
 
@@ -906,11 +937,11 @@ function confirmImport() {
 
   let added = 0;
   selected.forEach(name => {
-    if (!globalNames.has(name.toLowerCase())) {
-      students.push({ id: uid(), name });
-      globalNames.add(name.toLowerCase());
-      added++;
-    }
+    if (globalNames.has(name.toLowerCase())) return;
+    if (/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ ]/.test(name)) return;
+    students.push({ id: uid(), name });
+    globalNames.add(name.toLowerCase());
+    added++;
   });
 
   DB.saveStudents(courseId, sectionId, students);

@@ -15,7 +15,9 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Verifica que el dominio del correo tenga registros MX (acepta emails)
+// Verifica que el dominio del correo tenga registros MX (acepta emails).
+// Fail-open: si la consulta DNS falla (red, firewall, entorno local) se deja
+// pasar para no bloquear correos válidos; el SMTP reportará el error real.
 async function emailDomainExists(email) {
   const domain = (email || '').split('@')[1];
   if (!domain) return false;
@@ -23,7 +25,7 @@ async function emailDomainExists(email) {
     const records = await dns.resolveMx(domain);
     return Array.isArray(records) && records.length > 0;
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -51,6 +53,28 @@ async function sendContactEmail({ fromName, fromEmail, subject, message }) {
   });
 }
 
+// Envía el código de 6 dígitos para verificar una cuenta nueva
+async function sendRegistrationEmail({ toEmail, code }) {
+  return transporter.sendMail({
+    from:    `"Gestión Académica" <${process.env.SMTP_USER}>`,
+    to:      toEmail,
+    subject: 'Código de verificación — Crear cuenta',
+    text:    `Tu código de verificación es: ${code}\n\nEste código expira en 10 minutos.\nSi no solicitaste este correo, ignóralo.`,
+    html: `
+      <div style="font-family:sans-serif;max-width:400px;margin:0 auto;color:#1E2A36">
+        <h2 style="color:#3B6FA0">Verificación de cuenta nueva</h2>
+        <p style="color:#6B7B8D;font-size:14px">Ingresa este código para confirmar tu correo y completar el registro:</p>
+        <div style="font-size:36px;font-weight:700;letter-spacing:10px;color:#1E2A36;
+                    background:#F5F2EE;border-radius:10px;padding:18px 24px;
+                    text-align:center;margin:16px 0">${code}</div>
+        <p style="color:#9AABB8;font-size:12px;line-height:1.6">
+          Este código expira en 10 minutos.<br>
+          Si no solicitaste este correo, ignóralo.
+        </p>
+      </div>`,
+  });
+}
+
 // Envía el código de 6 dígitos para recuperación de contraseña
 async function sendRecoveryEmail({ toEmail, code }) {
   return transporter.sendMail({
@@ -73,4 +97,4 @@ async function sendRecoveryEmail({ toEmail, code }) {
   });
 }
 
-module.exports = { emailDomainExists, sendContactEmail, sendRecoveryEmail };
+module.exports = { transporter, emailDomainExists, sendContactEmail, sendRegistrationEmail, sendRecoveryEmail };

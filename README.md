@@ -1,11 +1,10 @@
 # Gestión Académica
 
-Sistema web para la gestión de alumnos, secciones, actividades y calificaciones. Permite a los docentes organizar sus cursos, registrar notas por bimestre y competencia, importar/exportar datos en Excel y PDF, y gestionar sus cuentas de usuario.
+Sistema web para la gestión de alumnos, secciones, actividades y calificaciones. Permite a los docentes organizar sus cursos, registrar notas por bimestre y competencia, importar/exportar datos en Excel y PDF, y administrar sus cuentas de usuario. Incluye un panel de administración para la gestión de cuentas y bloqueo de usuarios.
 
 ---
 
-## Alcance del Sistema
-
+Alcance del Sistema
 La plataforma ha sido diseñada para apoyar las actividades que forman parte del trabajo cotidiano del docente en el aula, el cual se enfoca en registrar evidencias de aprendizaje, evaluar competencias, identificar dificultades y realizar un seguimiento al progreso individual de cada estudiante. Tareas como el cálculo y gestión del orden de mérito, por ejemplo, no constituyen como actividades habituales del proceso de enseñanza-aprendizaje desarrollado por el docente, sino una función administrativa que generalmente es realizada por la dirección de la institución educativa mediante sistemas oficiales como SIAGIE, especialmente para la elaboración de reportes institucionales y reconocimientos académicos. Por ello, dicha funcionalidad se encuentra fuera del alcance del sistema propuesto.
 
 ---
@@ -13,15 +12,16 @@ La plataforma ha sido diseñada para apoyar las actividades que forman parte del
 ## Características
 
 - Registro e inicio de sesión con contraseña hasheada (bcrypt)
+- Verificación de cuenta por código de correo electrónico (TTL de 10 minutos)
 - Recuperación de contraseña por código de verificación por correo
-- Gestión de cursos, secciones y alumnos
+- Gestión de cursos, secciones, alumnos y horarios
 - Registro de calificaciones por bimestre y competencia (AD / A / B / C)
 - Importación de alumnos desde archivo Excel
 - Exportación de reportes a PDF y Excel
 - Modo oscuro / modo claro
-- Panel de administración: gestión de cuentas y bloqueo de usuarios
+- Panel de administración: estadísticas, gestión y bloqueo de cuentas
 - Formulario de contacto con envío por correo
-- Rate limiting, CORS y protección de rutas sensibles
+- Rate limiting, CORS, Helmet y protección de rutas sensibles
 
 ---
 
@@ -31,7 +31,8 @@ La plataforma ha sido diseñada para apoyar las actividades que forman parte del
 |------|-----------|
 | Backend | Node.js + Express |
 | Base de datos | MySQL 8 |
-| Autenticación | bcrypt + sesión por cabecera |
+| Autenticación | bcrypt + sesión por cabecera (`x-user-id`) |
+| Correo | Nodemailer (SMTP) |
 | Frontend | HTML, CSS, JavaScript vanilla |
 | Exportación | jsPDF + jsPDF-AutoTable, ExcelJS |
 | Seguridad | Helmet, express-rate-limit, CORS |
@@ -52,28 +53,11 @@ Antes de empezar, asegúrate de tener instalado:
 
 ## Instalación y ejecución en Visual Studio Code
 
-### 1. Clonar o descargar el proyecto
+### 1. descarga el ZIP desde GitHub y extráelo.
 
-```bash
-git clone <url-del-repositorio>
-```
+### 2. Abrir la carpeta extraida en Visual Studio Code
 
-O descarga el ZIP desde GitHub y extráelo.
-
-### 2. Abrir en Visual Studio Code
-
-1. Abre VS Code
-2. Ve a **Archivo → Abrir carpeta** (`Ctrl + K`, `Ctrl + O`)
-3. Selecciona la carpeta del proyecto
-4. Acepta la confianza del espacio de trabajo si se solicita
-
-### 3. Abrir la terminal integrada
-
-Presiona `` Ctrl + ` `` (acento grave) o ve a **Terminal → Nueva terminal**.
-
-### 4. Instalar dependencias
-
-En la terminal ejecuta:
+### 3. Instalar dependencias en la terminal
 
 ```bash
 npm install
@@ -81,15 +65,17 @@ npm install
 
 ### 5. Configurar la base de datos MySQL
 
-#### 5.1 Crear la base de datos
+#### 5.2 Importar el esquema
 
-Abre tu cliente MySQL (MySQL Workbench, HeidiSQL, terminal, etc.) y ejecuta:
+El proyecto incluye el archivo `schema.sql` en la raíz con todas las tablas, índices y el usuario administrador por defecto. 
 
-Un archivo `schema.sql` que se encuntra al descargar el proyecto.
+En mySQL Workbench, abre `schema.sql` y ejecútalo.
+
+> **Credenciales por defecto del administrador:** usuario `admin`, contraseña `admin123`.
 
 ### 6. Configurar las variables de entorno
 
-En el archivo `.env` en la raíz del proyecto con ajusta los valores a tu entorno:
+En el archivo `.env` en la raíz del proyecto con el siguiente contenido (ajusta los valores a tu entorno):
 
 ```env
 # ─── BASE DE DATOS ─────────────────────────────────────
@@ -99,21 +85,8 @@ DB_USER=root
 DB_PASSWORD=tu_contraseña_mysql
 DB_NAME=gestion_academica
 
-# ─── SERVIDOR ──────────────────────────────────────────
-PORT=3000
-CORS_ORIGIN=http://localhost:3000
-
-# ─── EMAIL (SMTP) ──────────────────────────────────────
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=tu_correo@gmail.com
-SMTP_PASS=xxxx_xxxx_xxxx_xxxx
-
-CONTACT_RECIPIENT=soporte@tu_dominio.com
 ```
 
-> **Correo con Gmail:** debes crear una [Contraseña de aplicación](https://myaccount.google.com/apppasswords) en tu cuenta de Google y usarla en `SMTP_PASS`. La contraseña normal de Gmail no funciona con SMTP.
 
 ### 7. Ejecutar el servidor
 
@@ -152,11 +125,12 @@ Instálalas desde la pestaña **Extensiones** (`Ctrl + Shift + X`):
 
 ---
 
+
 ## Estructura del proyecto
 
 ```
 ├── public/                  # Frontend estático
-│   ├── *.html               # Páginas de la aplicación
+│   ├── *.html               # Páginas de la aplicación (login, dashboard, secciones, etc.)
 │   ├── css/                 # Hojas de estilo
 │   ├── js/                  # Lógica del cliente
 │   └── libs/                # jsPDF y AutoTable
@@ -169,52 +143,123 @@ Instálalas desde la pestaña **Extensiones** (`Ctrl + Shift + X`):
 │   ├── middleware/
 │   │   ├── auth.js          # Verificación de rol admin
 │   │   ├── rateLimiter.js   # Límite de peticiones por ruta
-│   │   └── security.js      # Bloqueo de rutas sensibles
-│   ├── models/              # Modelos de datos (Usuario, Alumno, etc.)
+│   │   └── security.js      # Bloqueo de rutas del servidor
+│   ├── models/              # Modelos de datos (Usuario, Alumno, Curso, etc.)
 │   ├── routes/              # Definición de rutas por dominio
 │   └── services/            # Lógica de negocio
 ├── utils/
 │   └── mailer.js            # Envío de correos con Nodemailer
 ├── db/
-│   └── mysql.js             # Re-exportación para compatibilidad
-├── tests/                   # Tests con Jest y Supertest
+│   └── mysql.js             # Re-exportación del pool para compatibilidad
 ├── server.js                # Punto de entrada del servidor
+├── schema.sql               # Esquema completo de la base de datos
 ├── package.json
 └── .env                     # Variables de entorno (no subir a Git)
 ```
 
 ---
 
+## Páginas del frontend
+
+| Página | Ruta |
+|--------|------|
+| Inicio de sesión | `/` |
+| Dashboard | `/inicio.html` |
+| Secciones | `/secciones.html` |
+| Detalle de sección | `/seccionespecifica.html` |
+| Lista de alumnos | `/alumnos.html` |
+| Detalle de alumno | `/alumnoespecifico.html` |
+| Horarios | `/horarios.html` |
+| Cuenta de usuario | `/cuenta.html` |
+| Contacto | `/contactanos.html` |
+| Tutorial | `/tutorial.html` |
+| Panel de admin | `/admin-dashboard.html` |
+| Gestión de cuentas (admin) | `/admin-cuentas.html` |
+| Cuentas bloqueadas (admin) | `/admin-bloqueadas.html` |
+
+---
+
 ## Endpoints de la API
+
+### Autenticación
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | POST | `/api/auth/login` | Iniciar sesión |
 | POST | `/api/auth/register` | Crear cuenta |
-| POST | `/api/auth/change-password` | Cambiar contraseña |
-| POST | `/api/auth/reset-password` | Restablecer contraseña |
-| DELETE | `/api/auth/account` | Eliminar cuenta |
-| GET | `/api/db` | Obtener datos del usuario |
-| PUT | `/api/db` | Guardar datos del usuario |
-| POST | `/api/export/excel` | Exportar notas a Excel |
-| POST | `/api/import/excel` | Importar alumnos desde Excel |
+| POST | `/api/auth/change-password` | Cambiar contraseña (autenticado) |
+| POST | `/api/auth/reset-password` | Restablecer contraseña tras recuperación |
+| POST | `/api/auth/send-register-code` | Enviar código de verificación para registro |
+| POST | `/api/auth/verify-register-code` | Verificar código y completar registro |
+| POST | `/api/auth/send-recovery-code` | Enviar código de recuperación de contraseña |
+| POST | `/api/auth/verify-recovery-code` | Verificar código de recuperación |
+| DELETE | `/api/auth/account` | Eliminar cuenta (requiere contraseña) |
+
+### Datos del usuario
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/db` | Obtener cursos, secciones, alumnos, actividades y notas |
+| PUT | `/api/db` | Guardar / sincronizar datos del usuario |
+
+### Importación y exportación
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/api/export/excel` | Exportar notas a archivo Excel |
+| POST | `/api/import/excel` | Importar alumnos desde archivo Excel |
+
+### Correo y contacto
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
 | POST | `/api/contact` | Enviar mensaje de contacto |
-| POST | `/api/send-code` | Enviar código de recuperación |
-| GET | `/api/admin/stats` | Estadísticas (solo admin) |
-| GET | `/api/admin/accounts` | Listar cuentas (solo admin) |
-| PUT | `/api/admin/accounts/:id/status` | Bloquear / desbloquear cuenta (solo admin) |
-| DELETE | `/api/admin/accounts/:id` | Eliminar cuenta (solo admin) |
+| POST | `/api/send-code` | Enviar código de verificación |
+
+### Administración (solo rol `admin`)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/admin/stats` | Estadísticas del sistema |
+| GET | `/api/admin/accounts` | Listar todas las cuentas |
+| GET | `/api/admin/blocked` | Listar cuentas bloqueadas |
+| PUT | `/api/admin/accounts/:id/status` | Bloquear o desbloquear cuenta |
+| PUT | `/api/admin/accounts/:id/unblock` | Desbloquear cuenta explícitamente |
+| DELETE | `/api/admin/accounts/:id` | Eliminar cuenta |
+
+---
+
+## Esquema de base de datos
+
+Las tablas principales son:
+
+| Tabla | Descripción |
+|-------|-------------|
+| `usuarios` | Cuentas de docentes y administradores |
+| `cursos` | Cursos creados por cada docente |
+| `competencias_curso` | Competencias por bimestre de cada curso |
+| `salones` | Aulas (grado + letra, ej. 3°A) |
+| `secciones` | Relación curso–aula con competencias asignadas |
+| `horario_secciones` | Días y horarios de cada sección |
+| `alumnos` | Estudiantes vinculados a un salón |
+| `actividades` | Tareas y evaluaciones por sección y bimestre |
+| `notas` | Calificaciones (AD / A / B / C) por alumno y actividad |
+| `referencia_dias` | Catálogo de días de la semana |
+| `referencia_franjas` | Franjas horarias disponibles (07:00–22:00) |
+
+El esquema completo con índices y datos iniciales está en `schema.sql`.
 
 ---
 
 ## Seguridad
 
-- Las contraseñas se almacenan con hash `bcrypt` (10 rondas)
-- Las rutas `/api/admin/*` requieren rol `admin` verificado en base de datos
-- Rate limiting: 20 intentos de login por 15 min, 5 envíos de correo por 15 min
-- `Helmet` activa cabeceras de seguridad HTTP (CSP, HSTS, etc.)
+- Las contraseñas se almacenan con hash `bcrypt` (10–12 rondas)
+- Las rutas `/api/admin/*` requieren rol `admin` verificado en base de datos en cada petición
+- Bloqueo de cuenta tras 5 intentos de login fallidos (15 minutos de bloqueo)
+- Rate limiting: 20 intentos de login por 15 min, 5 envíos de correo por 15 min (desactivado en entorno `test`)
+- `Helmet` activa cabeceras de seguridad HTTP (CSP, HSTS, X-Frame-Options, etc.)
 - Los archivos del servidor (`/src/`, `/.env`, `/server.js`, etc.) no son accesibles desde el navegador
-- El archivo `.env` está excluido del repositorio vía `.gitignore`
+- El archivo `.env` debe excluirse del repositorio vía `.gitignore`
 
 ---
 
@@ -223,7 +268,12 @@ Instálalas desde la pestaña **Extensiones** (`Ctrl + Shift + X`):
 **`Error al conectar con MySQL`**
 - Verifica que el servicio MySQL esté corriendo
 - Comprueba usuario, contraseña y nombre de la base de datos en `.env`
-- Asegúrate de que la base de datos `gestion_academica` exista
+- Asegúrate de que la base de datos `gestion_academica` exista y el esquema esté importado
 
 **Puerto 3000 en uso**
 - Cambia el valor de `PORT` en `.env` (por ejemplo, `PORT=3001`) y accede a `http://localhost:3001`
+
+**Error al enviar correos**
+- Verifica que `SMTP_USER` y `SMTP_PASS` sean correctos
+- Con Gmail, usa una [Contraseña de aplicación](https://myaccount.google.com/apppasswords), no tu contraseña habitual
+- Asegúrate de que el acceso SMTP esté habilitado en tu cuenta de correo

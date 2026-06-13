@@ -92,7 +92,7 @@ async function importFromExcel(fileBase64) {
       if (!isNaN(Number(val)) || val === 'N°' || val === '#') return;
     }
     const val = String(row.getCell(nameCol).value || '').trim();
-    if (val && isNaN(Number(val))) names.push(val);
+    if (val && isNaN(Number(val)) && !/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ ]/.test(val)) names.push(val);
   });
 
   return names;

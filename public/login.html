@@ -130,8 +130,8 @@
       <div class="lcard-icon lcard-icon-blue">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="26" height="26"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
       </div>
-      <h2 class="lcard-title">Ingresar código</h2>
-      <p class="lcard-sub">Enviamos un código de 6 dígitos a<br/><strong id="code-email-lbl" class="lcard-highlight"></strong></p>
+      <h2 class="lcard-title" id="code-modal-title">Ingresar código</h2>
+      <p class="lcard-sub" id="code-modal-sub">Enviamos un código de 6 dígitos a<br/><strong id="code-email-lbl" class="lcard-highlight"></strong></p>
 
       <div class="code-inputs">
         <input class="code-digit" type="text" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="one-time-code"/>
@@ -147,7 +147,7 @@
       <div class="lcard-links">
         <a class="llink" onclick="doResendCode()">Reenviar código</a>
         <span class="llink-dot">·</span>
-        <a class="llink" onclick="switchCard('modal-recover')">Cambiar correo</a>
+        <a class="llink" id="code-change-link" onclick="switchCard('modal-recover')">Cambiar correo</a>
       </div>
     </div>
 

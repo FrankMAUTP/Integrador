@@ -2,9 +2,9 @@
 // LOGIN.JS
 // =========================================
 
-const _recovery = { code: null, email: null, userId: null };
-
-function getUsers() { return DB.getUsers(); }
+const _recovery = { email: null, userId: null };
+const _register = { email: null };
+let _activeCodeFlow = 'recovery'; // 'recovery' | 'register'
 
 // ---- CARD SWITCHING ----
 function switchCard(id) {
@@ -14,6 +14,35 @@ function switchCard(id) {
   target.classList.add('active');
   const first = target.querySelector('input:not([readonly]):not([tabindex="-1"])');
   if (first) setTimeout(() => first.focus(), 40);
+}
+
+// ---- HELPER: configura el modal-code según el flujo ----
+function _setupCodeModal(flow, email) {
+  _activeCodeFlow = flow;
+  document.getElementById('code-email-lbl').textContent = email;
+
+  const title   = document.getElementById('code-modal-title');
+  const sub     = document.getElementById('code-modal-sub');
+  const chgLink = document.getElementById('code-change-link');
+
+  if (flow === 'register') {
+    title.textContent = 'Verificar correo';
+    sub.innerHTML = 'Enviamos un código de 6 dígitos a<br/><strong id="code-email-lbl" class="lcard-highlight">' + email + '</strong>';
+    chgLink.textContent = 'Cambiar correo';
+    chgLink.onclick = () => switchCard('modal-register');
+  } else {
+    title.textContent = 'Ingresar código';
+    sub.innerHTML = 'Enviamos un código de 6 dígitos a<br/><strong id="code-email-lbl" class="lcard-highlight">' + email + '</strong>';
+    chgLink.textContent = 'Cambiar correo';
+    chgLink.onclick = () => switchCard('modal-recover');
+  }
+
+  _clearCodeDigits();
+  switchCard('modal-code');
+  setTimeout(() => {
+    const first = document.querySelector('.code-digit');
+    if (first) first.focus();
+  }, 60);
 }
 
 // ---- MODAL 1: LOGIN ----
@@ -55,20 +84,17 @@ async function doRegister() {
   if (pass !== pass2)       { showToast('Las contraseñas no coinciden', 'error'); return; }
 
   try {
-    const res  = await fetch('/api/auth/register', {
+    const res  = await fetch('/api/auth/send-register-code', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ username, email, password: pass }),
     });
     const data = await res.json();
-    if (!res.ok) { showToast(data.error || 'Error al crear la cuenta', 'error'); return; }
+    if (!res.ok) { showToast(data.error || 'Error al enviar el código', 'error'); return; }
 
-    showToast('Cuenta creada correctamente', 'success');
-    document.getElementById('r-user').value  = '';
-    document.getElementById('r-email').value = '';
-    document.getElementById('r-pass').value  = '';
-    document.getElementById('r-pass2').value = '';
-    switchCard('modal-login');
+    _register.email = email;
+    showToast('Código enviado a tu correo', 'success');
+    _setupCodeModal('register', email);
   } catch {
     showToast('No se pudo conectar con el servidor', 'error');
   }
@@ -79,45 +105,58 @@ async function doRecover() {
   const email = document.getElementById('rec-email').value.trim().toLowerCase();
   if (!email) { showToast('Ingresa tu correo electrónico', 'error'); return; }
 
-  const user = getUsers().find(u => u.email === email);
-  if (!user) { showToast('No existe una cuenta con ese correo', 'error'); return; }
+  try {
+    const res  = await fetch('/api/auth/send-recovery-code', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Error al enviar el código', 'error'); return; }
 
-  _recovery.code   = String(Math.floor(100000 + Math.random() * 900000));
-  _recovery.email  = email;
-  _recovery.userId = user.id;
-
-  // Mostrar código en pantalla (modo local)
-  alert(`Código de verificación\n\n${_recovery.code}\n\nIntroduce este código en la siguiente pantalla.`);
-
-  // Intentar enviar por email sin bloquear el flujo
-  fetch('/api/send-code', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ toEmail: email, code: _recovery.code }),
-  }).catch(() => {});
-
-  document.getElementById('code-email-lbl').textContent = email;
-  _clearCodeDigits();
-  switchCard('modal-code');
-  setTimeout(() => {
-    const first = document.querySelector('.code-digit');
-    if (first) first.focus();
-  }, 60);
+    _recovery.email = email;
+    showToast('Código enviado a tu correo', 'success');
+    _setupCodeModal('recovery', email);
+  } catch {
+    showToast('No se pudo conectar con el servidor', 'error');
+  }
 }
 
-// ---- MODAL 4: INGRESAR CÓDIGO ----
-function doResendCode() {
-  if (!_recovery.email) return;
-  _recovery.code = String(Math.floor(100000 + Math.random() * 900000));
-
-  alert(`Nuevo código de verificación\n\n${_recovery.code}`);
-
-  fetch('/api/send-code', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ toEmail: _recovery.email, code: _recovery.code }),
-  }).catch(() => {});
-
+// ---- MODAL 4: REENVIAR CÓDIGO ----
+async function doResendCode() {
+  if (_activeCodeFlow === 'register') {
+    if (!_register.email) return;
+    try {
+      const res = await fetch('/api/auth/send-register-code', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          username: document.getElementById('r-user').value.trim(),
+          email:    _register.email,
+          password: document.getElementById('r-pass').value,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || 'No se pudo reenviar', 'error'); return; }
+      showToast('Nuevo código enviado', 'success');
+    } catch {
+      showToast('No se pudo conectar con el servidor', 'error');
+    }
+  } else {
+    if (!_recovery.email) return;
+    try {
+      const res = await fetch('/api/auth/send-recovery-code', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: _recovery.email }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || 'No se pudo reenviar', 'error'); return; }
+      showToast('Nuevo código enviado', 'success');
+    } catch {
+      showToast('No se pudo conectar con el servidor', 'error');
+    }
+  }
   _clearCodeDigits();
   setTimeout(() => {
     const first = document.querySelector('.code-digit');
@@ -125,30 +164,64 @@ function doResendCode() {
   }, 40);
 }
 
-function doVerifyCode() {
+// ---- MODAL 4: VERIFICAR CÓDIGO ----
+async function doVerifyCode() {
   const digits  = [...document.querySelectorAll('.code-digit')];
   const entered = digits.map(d => d.value).join('');
 
   if (entered.length < 6) {
     showToast('Ingresa el código completo de 6 dígitos', 'error'); return;
   }
-  if (entered !== _recovery.code) {
-    showToast('Código incorrecto. Inténtalo de nuevo.', 'error');
-    _clearCodeDigits();
-    digits[0].focus();
-    return;
-  }
 
-  const user = getUsers().find(u => u.id === _recovery.userId);
-  if (user) {
-    document.getElementById('reset-email').value = user.email;
-    document.getElementById('reset-user').value  = user.username;
+  if (_activeCodeFlow === 'register') {
+    try {
+      const res  = await fetch('/api/auth/verify-register-code', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: _register.email, code: entered }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Código incorrecto', 'error');
+        _clearCodeDigits();
+        digits[0].focus();
+        return;
+      }
+      _register.email = null;
+      document.getElementById('r-user').value  = '';
+      document.getElementById('r-email').value = '';
+      document.getElementById('r-pass').value  = '';
+      document.getElementById('r-pass2').value = '';
+      showToast('Cuenta creada correctamente. Inicia sesión.', 'success');
+      switchCard('modal-login');
+    } catch {
+      showToast('No se pudo conectar con el servidor', 'error');
+    }
+  } else {
+    try {
+      const res  = await fetch('/api/auth/verify-recovery-code', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: _recovery.email, code: entered }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Código incorrecto', 'error');
+        _clearCodeDigits();
+        digits[0].focus();
+        return;
+      }
+      _recovery.userId = data.userId;
+      document.getElementById('reset-email').value = data.email;
+      document.getElementById('reset-user').value  = data.username;
+      document.getElementById('reset-pass').value  = '';
+      document.getElementById('reset-pass2').value = '';
+      showToast('Código verificado correctamente', 'success');
+      switchCard('modal-reset');
+    } catch {
+      showToast('No se pudo conectar con el servidor', 'error');
+    }
   }
-  document.getElementById('reset-pass').value  = '';
-  document.getElementById('reset-pass2').value = '';
-
-  showToast('Código verificado correctamente', 'success');
-  switchCard('modal-reset');
 }
 
 // ---- MODAL 5: RESTABLECER CONTRASEÑA ----
@@ -170,9 +243,8 @@ async function doReset() {
     const data = await res.json();
     if (!res.ok) { showToast(data.error || 'Error al restablecer la contraseña', 'error'); return; }
 
-    const user = getUsers().find(u => u.id === _recovery.userId);
-    const savedUsername = user?.username || '';
-    _recovery.code = _recovery.email = _recovery.userId = null;
+    const savedUsername = document.getElementById('reset-user').value;
+    _recovery.email = _recovery.userId = null;
     showToast('Contraseña restablecida. Inicia sesión.', 'success');
     document.getElementById('rec-email').value = '';
     document.getElementById('l-user').value    = savedUsername;

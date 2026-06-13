@@ -9,7 +9,7 @@ let studentCourses = [];
 
 const BIMESTRES = [1, 2, 3, 4];
 const ACT_TYPE_LABEL = { practica: 'Práctica', exposicion: 'Exposición', trabajo: 'Trabajo' };
-const GV = { AD: 4, A: 3, B: 2, C: 1 };
+const GV = { AD: 4, A: 3, B: 2.5, C: 1 };
 
 function init() {
   studentName = STATE.get('studentName') || '';

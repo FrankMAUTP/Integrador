@@ -62,4 +62,55 @@ async function deleteAccount(req, res) {
   }
 }
 
-module.exports = { login, register, changePassword, resetPassword, deleteAccount };
+async function sendRegisterCode(req, res) {
+  const { username, email, password } = req.body || {};
+  if (!username || !email || !password) return res.status(400).json({ error: 'Campos incompletos' });
+  try {
+    await authService.sendRegisterCode(username, email, password);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Send register code error:', err.message);
+    res.status(err.status || 500).json({ error: err.message || 'No se pudo enviar el código' });
+  }
+}
+
+async function verifyRegisterCode(req, res) {
+  const { email, code } = req.body || {};
+  if (!email || !code) return res.status(400).json({ error: 'Campos incompletos' });
+  try {
+    const user = await authService.verifyAndRegister(email, code);
+    res.json(user);
+  } catch (err) {
+    console.error('Verify register code error:', err.message);
+    res.status(err.status || 500).json({ error: err.message || 'Error al verificar el código' });
+  }
+}
+
+async function sendRecoveryCode(req, res) {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'Campos incompletos' });
+  try {
+    await authService.sendRecoveryCode(email);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Send recovery code error:', err.message);
+    res.status(err.status || 500).json({ error: err.message || 'No se pudo enviar el código' });
+  }
+}
+
+async function verifyRecoveryCode(req, res) {
+  const { email, code } = req.body || {};
+  if (!email || !code) return res.status(400).json({ error: 'Campos incompletos' });
+  try {
+    const result = await authService.verifyRecoveryCode(email, code);
+    res.json(result);
+  } catch (err) {
+    console.error('Verify recovery code error:', err.message);
+    res.status(err.status || 500).json({ error: err.message || 'Error al verificar el código' });
+  }
+}
+
+module.exports = {
+  login, register, changePassword, resetPassword, deleteAccount,
+  sendRegisterCode, verifyRegisterCode, sendRecoveryCode, verifyRecoveryCode,
+};

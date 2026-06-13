@@ -1,10 +1,28 @@
 const bcrypt = require('bcrypt');
 const { getPool } = require('../../db/mysql');
 const UsuarioDAO = require('../dao/UsuarioDAO');
+const emailService = require('./emailService');
 
 const SALT_ROUNDS  = 12;
 const MAX_INTENTOS = 5;
 const BLOQUEO_MS   = 15 * 60 * 1000;
+const CODE_TTL_MS  = 10 * 60 * 1000;
+
+// In-memory store for pending email verifications (register & recovery)
+// Key: 'reg:<email>' | 'rec:<email>'
+// Value: { code, expiresAt, ...payload }
+const _verificationStore = new Map();
+
+function _genCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function _cleanStore() {
+  const now = Date.now();
+  for (const [key, entry] of _verificationStore) {
+    if (entry.expiresAt < now) _verificationStore.delete(key);
+  }
+}
 
 function createError(message, status) {
   const err = new Error(message);
@@ -127,11 +145,93 @@ async function deleteAccount(userId, password) {
       : stored === password;
     if (!match) throw createError('Contraseña incorrecta', 401);
 
-    await conn.query('DELETE FROM cursos WHERE id_usuario = ?', [userId]);
+    await conn.query('DELETE FROM alumnos WHERE id_usuario = ?', [userId]);
+    await conn.query('DELETE FROM cursos   WHERE id_usuario = ?', [userId]);
     await UsuarioDAO.delete(conn, userId);
   } finally {
     conn.release();
   }
 }
 
-module.exports = { login, register, changePassword, resetPassword, deleteAccount };
+async function sendRegisterCode(username, email, password) {
+  _cleanStore();
+  const conn = await getPool().getConnection();
+  try {
+    if (await UsuarioDAO.checkUsernameExists(conn, username))
+      throw createError('Ese nombre de usuario ya está en uso', 400);
+    if (await UsuarioDAO.checkEmailExists(conn, email))
+      throw createError('Ese correo ya está registrado', 400);
+  } finally {
+    conn.release();
+  }
+
+  const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+  const code = _genCode();
+  _verificationStore.set(`reg:${email}`, {
+    username, email, hashedPassword, code,
+    expiresAt: Date.now() + CODE_TTL_MS,
+  });
+  await emailService.sendRegistrationCode({ toEmail: email, code });
+}
+
+async function verifyAndRegister(email, code) {
+  const entry = _verificationStore.get(`reg:${email}`);
+  if (!entry) throw createError('No hay una verificación pendiente para ese correo', 400);
+  if (Date.now() > entry.expiresAt) {
+    _verificationStore.delete(`reg:${email}`);
+    throw createError('El código ha expirado. Solicita uno nuevo.', 400);
+  }
+  if (entry.code !== code) throw createError('Código incorrecto', 400);
+
+  _verificationStore.delete(`reg:${email}`);
+  const conn = await getPool().getConnection();
+  try {
+    if (await UsuarioDAO.checkUsernameExists(conn, entry.username))
+      throw createError('Ese nombre de usuario ya está en uso', 400);
+    if (await UsuarioDAO.checkEmailExists(conn, email))
+      throw createError('Ese correo ya está registrado', 400);
+
+    const id = `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    await UsuarioDAO.create(conn, { id, username: entry.username, email, hashedPassword: entry.hashedPassword });
+    return { id, username: entry.username, displayName: entry.username, email, rol: 'docente' };
+  } finally {
+    conn.release();
+  }
+}
+
+async function sendRecoveryCode(email) {
+  _cleanStore();
+  const conn = await getPool().getConnection();
+  let user;
+  try {
+    user = await UsuarioDAO.findByEmail(conn, email);
+  } finally {
+    conn.release();
+  }
+  if (!user) throw createError('No existe una cuenta con ese correo', 404);
+
+  const code = _genCode();
+  _verificationStore.set(`rec:${email}`, {
+    userId: user.id, email, username: user.usuario, code,
+    expiresAt: Date.now() + CODE_TTL_MS,
+  });
+  await emailService.sendRecoveryCode({ toEmail: email, code });
+}
+
+async function verifyRecoveryCode(email, code) {
+  const entry = _verificationStore.get(`rec:${email}`);
+  if (!entry) throw createError('No hay una recuperación pendiente para ese correo', 400);
+  if (Date.now() > entry.expiresAt) {
+    _verificationStore.delete(`rec:${email}`);
+    throw createError('El código ha expirado. Solicita uno nuevo.', 400);
+  }
+  if (entry.code !== code) throw createError('Código incorrecto', 400);
+
+  _verificationStore.delete(`rec:${email}`);
+  return { userId: entry.userId, email: entry.email, username: entry.username };
+}
+
+module.exports = {
+  login, register, changePassword, resetPassword, deleteAccount,
+  sendRegisterCode, verifyAndRegister, sendRecoveryCode, verifyRecoveryCode,
+};

@@ -106,6 +106,14 @@ function renderScheduleUI() {
   renderDayTimesSection();
 }
 
+const _HOUR_OPTS = Array.from({ length: 16 }, (_, i) => {
+  const h = String(i + 7).padStart(2, '0');
+  return `<option value="${h}">${h}</option>`;
+}).join('');
+
+const _MIN_OPTS = ['00','05','10','15','20','25','30','35','40','45','50','55']
+  .map(m => `<option value="${m}">${m}</option>`).join('');
+
 function renderDayTimesSection() {
   const cont = document.getElementById('schedule-times');
   if (!cont) return;
@@ -113,25 +121,63 @@ function renderDayTimesSection() {
 
   cont.innerHTML =
     `<div class="schedule-times-header">
-      <span></span><span>Hora inicio</span><span>Hora fin</span>
+      <span></span><span>Hora inicio</span><span>Horas pedagógicas</span><span>Hora fin</span>
     </div>` +
     selectedDays.map(day => {
       const idx = DAYS.indexOf(day);
       return `<div class="schedule-day-row">
         <span class="schedule-day-label">${day}</span>
-        <input type="time" class="form-control" id="st-start-${idx}" min="07:00" max="22:00" />
-        <input type="time" class="form-control" id="st-end-${idx}"   min="07:00" max="22:00" />
+        <div class="time-selects">
+          <select class="form-control time-select-h" id="st-h-${idx}" onchange="updateEndTime(${idx})">${_HOUR_OPTS}</select>
+          <span class="time-colon">:</span>
+          <select class="form-control time-select-m" id="st-m-${idx}" onchange="updateEndTime(${idx})">${_MIN_OPTS}</select>
+        </div>
+        <select class="form-control" id="st-ph-${idx}" onchange="updateEndTime(${idx})">
+          <option value="1">1 (45 min)</option>
+          <option value="2">2 (90 min)</option>
+          <option value="3">3 (135 min)</option>
+          <option value="4">4 (180 min)</option>
+        </select>
+        <span class="st-end-display" id="st-end-${idx}">—</span>
       </div>`;
     }).join('');
 
   selectedDays.forEach(day => {
     const idx = DAYS.indexOf(day);
-    const t = dayTimes[day] || { start: '08:00', end: '09:00' };
-    const s = document.getElementById(`st-start-${idx}`);
-    const e = document.getElementById(`st-end-${idx}`);
-    if (s) s.value = t.start;
-    if (e) e.value = t.end;
+    const t = dayTimes[day] || { start: '08:00', pedagogicalHours: 1 };
+    const [h, m] = (t.start || '08:00').split(':');
+    const hEl = document.getElementById(`st-h-${idx}`);
+    const mEl = document.getElementById(`st-m-${idx}`);
+    const phEl = document.getElementById(`st-ph-${idx}`);
+    if (hEl) hEl.value = h;
+    if (mEl) {
+      const mNum = parseInt(m || '0', 10);
+      mEl.value = ['00','05','10','15','20','25','30','35','40','45','50','55']
+        .reduce((a, b) => Math.abs(parseInt(b, 10) - mNum) < Math.abs(parseInt(a, 10) - mNum) ? b : a);
+    }
+    if (phEl) phEl.value = t.pedagogicalHours || 1;
+    updateEndTime(idx);
   });
+}
+
+function getStartTime(idx) {
+  const h = document.getElementById(`st-h-${idx}`)?.value;
+  const m = document.getElementById(`st-m-${idx}`)?.value;
+  return h ? `${h}:${m || '00'}` : '';
+}
+
+function updateEndTime(idx) {
+  const ph  = document.getElementById(`st-ph-${idx}`);
+  const end = document.getElementById(`st-end-${idx}`);
+  if (!end) return;
+  const startVal = getStartTime(idx);
+  if (!startVal) { end.textContent = '—'; return; }
+  end.textContent = calcEndTimeStr(startVal, parseInt(ph?.value || '1', 10));
+}
+
+function calcEndTimeStr(startVal, hours) {
+  const endMin = toMin(startVal) + hours * 45;
+  return `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
 }
 
 function toggleDay(day, el) {
@@ -142,7 +188,7 @@ function toggleDay(day, el) {
   } else {
     selectedDays.push(day);
     selectedDays.sort((a, b) => DAYS.indexOf(a) - DAYS.indexOf(b));
-    dayTimes[day] = { start: '08:00', end: '09:00' };
+    dayTimes[day] = { start: '08:00', pedagogicalHours: 1 };
     el.classList.add('selected');
   }
   renderDayTimesSection();
@@ -151,10 +197,11 @@ function toggleDay(day, el) {
 function getSchedule() {
   const times = {};
   selectedDays.forEach(day => {
-    const idx = DAYS.indexOf(day);
-    const s = document.getElementById(`st-start-${idx}`);
-    const e = document.getElementById(`st-end-${idx}`);
-    times[day] = { start: s ? s.value : '08:00', end: e ? e.value : '09:00' };
+    const idx      = DAYS.indexOf(day);
+    const ph       = document.getElementById(`st-ph-${idx}`);
+    const startVal = getStartTime(idx) || '08:00';
+    const hours    = parseInt(ph?.value || '1', 10);
+    times[day] = { start: startVal, pedagogicalHours: hours, end: calcEndTimeStr(startVal, hours) };
   });
   return { days: [...selectedDays], times };
 }
@@ -164,9 +211,13 @@ function setSchedule(schedule) {
   selectedDays = (schedule.days || []).filter(d => DAYS.includes(d));
   dayTimes = {};
   selectedDays.forEach(day => {
-    dayTimes[day] = (schedule.times && schedule.times[day])
-      ? schedule.times[day]
-      : { start: '08:00', end: '09:00' };
+    const t = (schedule.times && schedule.times[day]) || {};
+    let pedagogicalHours = t.pedagogicalHours;
+    if (!pedagogicalHours && t.start && t.end) {
+      const diff = toMin(t.end) - toMin(t.start);
+      pedagogicalHours = Math.min(4, Math.max(1, Math.round(diff / 45)));
+    }
+    dayTimes[day] = { start: t.start || '08:00', pedagogicalHours: pedagogicalHours || 1 };
   });
   renderScheduleUI();
 }
@@ -303,17 +354,17 @@ function getScheduleConflicts(schedule, excludeSectionId) {
 
 function validateScheduleTimes() {
   for (const day of selectedDays) {
-    const idx   = DAYS.indexOf(day);
-    const sEl   = document.getElementById(`st-start-${idx}`);
-    const eEl   = document.getElementById(`st-end-${idx}`);
-    if (!sEl?.value || !eEl?.value) {
-      showToast(`Ingresa el horario para ${day}`, 'error'); return false;
+    const idx      = DAYS.indexOf(day);
+    const phEl     = document.getElementById(`st-ph-${idx}`);
+    const startVal = getStartTime(idx);
+    if (!startVal) {
+      showToast(`Ingresa la hora de inicio para ${day}`, 'error'); return false;
     }
-    const sMin  = toMin(sEl.value);
-    const eMin  = toMin(eEl.value);
-    if (sMin < 7 * 60)   { showToast(`Hora mínima 07:00 (${day})`, 'error'); return false; }
-    if (eMin > 22 * 60)  { showToast(`Hora máxima 22:00 (${day})`, 'error'); return false; }
-    if (sMin >= eMin)    { showToast(`La hora fin debe ser mayor a la de inicio (${day})`, 'error'); return false; }
+    const hours = parseInt(phEl?.value || '1', 10);
+    const eMin  = toMin(startVal) + hours * 45;
+    if (eMin > 22 * 60) {
+      showToast(`La hora fin ${calcEndTimeStr(startVal, hours)} excede las 22:00 (${day})`, 'error'); return false;
+    }
   }
   return true;
 }
@@ -385,7 +436,9 @@ function saveSection() {
 
 function deleteSection(id) {
   showConfirm('Eliminar sección', '¿Eliminar esta sección? Se perderán las actividades y notas. Si ningún otro curso usa la misma sección, sus alumnos también serán eliminados.', () => {
+    const section = DB.getSections(courseId).find(s => s.id === id);
     DB.deleteSectionData(courseId, id);
+    if (section) DB._clearStudentsIfOrphaned(section.grade, section.letter, id);
     DB.saveSections(courseId, DB.getSections(courseId).filter(s => s.id !== id));
     renderGradeFilter();
     renderSections();

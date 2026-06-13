@@ -9,6 +9,11 @@ const UsuarioDAO = {
     return rows[0] || null;
   },
 
+  async findByEmail(conn, email) {
+    const [rows] = await conn.query('SELECT * FROM usuarios WHERE correo = ?', [email]);
+    return rows[0] || null;
+  },
+
   async findPasswordById(conn, id) {
     const [rows] = await conn.query('SELECT contrasena FROM usuarios WHERE id = ?', [id]);
     return rows[0] || null;

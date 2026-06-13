@@ -56,6 +56,8 @@ async function deleteAccount(id) {
     const role = await AdminDAO.getUserRole(conn, id);
     if (role === null)    throw createError('Usuario no encontrado', 404);
     if (role === 'admin') throw createError('No se puede eliminar la cuenta admin', 400);
+    await conn.query('DELETE FROM alumnos WHERE id_usuario = ?', [id]);
+    await conn.query('DELETE FROM cursos   WHERE id_usuario = ?', [id]);
     await UsuarioDAO.delete(conn, id);
   } finally {
     conn.release();

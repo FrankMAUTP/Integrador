@@ -52,7 +52,10 @@ function init() {
       : activeStudents;
     renderTable(result);
   };
-  document.getElementById('search-input').addEventListener('input', searchHandler);
+  document.getElementById('search-input').addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ ]/g, '');
+    searchHandler(e);
+  });
   document.getElementById('search-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') searchHandler(e);
   });
