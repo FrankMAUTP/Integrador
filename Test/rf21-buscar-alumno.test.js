@@ -43,7 +43,7 @@ function buscarAlumno(textoBusqueda, bdAlumnos, filtros = {}) {
   }
 
   if (resultados.length === 0) {
-    return { mensaje: "No se encontraron alumnos", resultados: [] };
+    return { mensaje: "No se encontraron alumnos", resultados: [], textoLimpio };
   }
 
   return { mensaje: "Alumnos encontrados", resultados, textoLimpio };
